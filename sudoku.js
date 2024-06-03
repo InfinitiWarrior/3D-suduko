@@ -14,19 +14,7 @@ document.body.appendChild(renderer.domElement);
 const seeThroughMaterial = new THREE.MeshBasicMaterial({ color: 0x000000, transparent: true, opacity: 0 });
 const outlineMaterial = new THREE.LineBasicMaterial({ color: 0xffffff });
 
-// Create a cube geometry
-const geometry = new THREE.BoxGeometry(3, 3, 3); // Change the size of the main cube
-
-// Create the main cube
-const mainCube = new THREE.Mesh(geometry, seeThroughMaterial);
-scene.add(mainCube);
-
-// Create smaller cube geometry
-const smallCubeSize = 1; // Change the size of each smaller cube
-const smallCubeGeometry = new THREE.BoxGeometry(smallCubeSize, smallCubeSize, smallCubeSize);
-
-// Create even smaller cube geometry
-const evenSmallerCubeSize = smallCubeSize / 3; // Change the size of each even smaller cube
+const evenSmallerCubeSize = 1;
 const evenSmallerCubeGeometry = new THREE.BoxGeometry(evenSmallerCubeSize, evenSmallerCubeSize, evenSmallerCubeSize);
 
 // Create smaller cubes and position them inside the main cube
