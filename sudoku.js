@@ -13,9 +13,25 @@ document.body.appendChild(renderer.domElement);
 // Define materials
 const seeThroughMaterial = new THREE.MeshBasicMaterial({ color: 0x000000, transparent: true, opacity: 0 });
 const outlineMaterial = new THREE.LineBasicMaterial({ color: 0xffffff });
+const selectedMaterial = new THREE.MeshBasicMaterial({ color: 0xff0000, transparent: false, opacity: 1 }); // Red color for selected state
 
-const evenSmallerCubeSize = 1;
+// Create a cube geometry for the main cube
+const geometry = new THREE.BoxGeometry(3, 3, 3);
+
+// Create the main cube
+const mainCube = new THREE.Mesh(geometry, seeThroughMaterial);
+scene.add(mainCube);
+
+// Create smaller cube geometry
+const smallCubeSize = 1;
+const smallCubeGeometry = new THREE.BoxGeometry(smallCubeSize, smallCubeSize, smallCubeSize);
+
+// Create even smaller cube geometry
+const evenSmallerCubeSize = smallCubeSize / 3;
 const evenSmallerCubeGeometry = new THREE.BoxGeometry(evenSmallerCubeSize, evenSmallerCubeSize, evenSmallerCubeSize);
+
+// Store even smaller cubes for raycasting
+const evenSmallerCubes = [];
 
 // Create smaller cubes and position them inside the main cube
 for (let x = -1; x <= 1; x++) {
@@ -37,11 +53,15 @@ for (let x = -1; x <= 1; x++) {
                         const evenSmallerCube = new THREE.Mesh(evenSmallerCubeGeometry, seeThroughMaterial);
                         evenSmallerCube.position.set((i + 0.5) * evenSmallerCubeSize - evenSmallerCubeSize / 2, (j + 0.5) * evenSmallerCubeSize - evenSmallerCubeSize / 2, (k + 0.5) * evenSmallerCubeSize - evenSmallerCubeSize / 2);
                         smallCube.add(evenSmallerCube);
+                        evenSmallerCubes.push(evenSmallerCube);
 
                         // Add outline to even smaller cubes
                         const evenSmallerCubeEdgesGeometry = new THREE.EdgesGeometry(evenSmallerCubeGeometry);
                         const evenSmallerCubeOutline = new THREE.LineSegments(evenSmallerCubeEdgesGeometry, outlineMaterial);
                         evenSmallerCube.add(evenSmallerCubeOutline);
+
+                        // Initialize selection state
+                        evenSmallerCube.userData.selected = false;
                     }
                 }
             }
@@ -61,35 +81,57 @@ let mouseDown = false;
 let lastMouseX = null;
 let lastMouseY = null;
 
-// Event listener for mouse down
+// Raycaster for detecting clicks
+const raycaster = new THREE.Raycaster();
+const mouse = new THREE.Vector2();
+
+// Event listeners for mouse events
 document.addEventListener('mousedown', handleMouseDown);
 document.addEventListener('mouseup', handleMouseUp);
 document.addEventListener('mousemove', handleMouseMove);
+document.addEventListener('click', handleMouseClick);
 
-// Function to handle mouse down event
+// Functions to handle mouse events
 function handleMouseDown(event) {
     mouseDown = true;
     lastMouseX = event.clientX;
     lastMouseY = event.clientY;
 }
 
-// Function to handle mouse up event
 function handleMouseUp() {
     mouseDown = false;
 }
 
-// Function to handle mouse movement
 function handleMouseMove(event) {
     if (!mouseDown) return;
 
     const deltaX = event.clientX - lastMouseX;
     const deltaY = event.clientY - lastMouseY;
 
-    mainCube.rotation.y += deltaX * 0.005; // Rotate around y-axis
-    mainCube.rotation.x += deltaY * 0.005; // Rotate around x-axis
+    // Rotate the entire scene instead of just the mainCube
+    scene.rotation.y += deltaX * 0.005; // Rotate around y-axis
+    scene.rotation.x += deltaY * 0.005; // Rotate around x-axis
 
     lastMouseX = event.clientX;
     lastMouseY = event.clientY;
+}
+
+function handleMouseClick(event) {
+    // Calculate mouse position in normalized device coordinates
+    mouse.x = (event.clientX / window.innerWidth) * 2 - 1;
+    mouse.y = -(event.clientY / window.innerHeight) * 2 + 1;
+
+    // Update the raycaster with the camera and mouse position
+    raycaster.setFromCamera(mouse, camera);
+
+    // Calculate objects intersecting the raycaster
+    const intersects = raycaster.intersectObjects(evenSmallerCubes);
+
+    if (intersects.length > 0) {
+        const intersectedObject = intersects[0].object;
+        intersectedObject.material = intersectedObject.userData.selected ? seeThroughMaterial : selectedMaterial;
+        intersectedObject.userData.selected = !intersectedObject.userData.selected;
+    }
 }
 
 // Render the scene
