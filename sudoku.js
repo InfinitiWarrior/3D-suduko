@@ -11,7 +11,7 @@ renderer.setSize(window.innerWidth, window.innerHeight);
 document.body.appendChild(renderer.domElement);
 
 // Define materials
-const seeThroughMaterial = new THREE.MeshBasicMaterial({ color: 0x000000, transparent: true, opacity: 0 });
+const transparentMaterial = new THREE.MeshBasicMaterial({ color: 0x000000, transparent: true, opacity: 0 });
 const outlineMaterial = new THREE.LineBasicMaterial({ color: 0xffffff });
 const selectedMaterial = new THREE.MeshBasicMaterial({ color: 0xff0000, transparent: false, opacity: 1 }); // Red color for selected state
 
@@ -19,52 +19,32 @@ const selectedMaterial = new THREE.MeshBasicMaterial({ color: 0xff0000, transpar
 const geometry = new THREE.BoxGeometry(3, 3, 3);
 
 // Create the main cube
-const mainCube = new THREE.Mesh(geometry, seeThroughMaterial);
+const mainCube = new THREE.Mesh(geometry, transparentMaterial);
 scene.add(mainCube);
 
 // Create smaller cube geometry
-const smallCubeSize = 1;
+const smallCubeSize = 1 / 3;
 const smallCubeGeometry = new THREE.BoxGeometry(smallCubeSize, smallCubeSize, smallCubeSize);
 
-// Create even smaller cube geometry
-const evenSmallerCubeSize = smallCubeSize / 3;
-const evenSmallerCubeGeometry = new THREE.BoxGeometry(evenSmallerCubeSize, evenSmallerCubeSize, evenSmallerCubeSize);
-
-// Store even smaller cubes for raycasting
-const evenSmallerCubes = [];
+// Store smaller cubes for raycasting
+const smallerCubes = [];
 
 // Create smaller cubes and position them inside the main cube
-for (let x = -1; x <= 1; x++) {
-    for (let y = -1; y <= 1; y++) {
-        for (let z = -1; z <= 1; z++) {
-            const smallCube = new THREE.Mesh(smallCubeGeometry, seeThroughMaterial);
+for (let x = -4; x <= 4; x++) {
+    for (let y = -4; y <= 4; y++) {
+        for (let z = -4; z <= 4; z++) {
+            const smallCube = new THREE.Mesh(smallCubeGeometry, transparentMaterial);
             smallCube.position.set(x * smallCubeSize, y * smallCubeSize, z * smallCubeSize);
             mainCube.add(smallCube);
+            smallerCubes.push(smallCube);
 
             // Add outline to smaller cubes
             const smallCubeEdgesGeometry = new THREE.EdgesGeometry(smallCubeGeometry);
             const smallCubeOutline = new THREE.LineSegments(smallCubeEdgesGeometry, outlineMaterial);
             smallCube.add(smallCubeOutline);
 
-            // Create even smaller cubes and position them inside each small cube
-            for (let i = -1; i <= 1; i++) {
-                for (let j = -1; j <= 1; j++) {
-                    for (let k = -1; k <= 1; k++) {
-                        const evenSmallerCube = new THREE.Mesh(evenSmallerCubeGeometry, seeThroughMaterial);
-                        evenSmallerCube.position.set((i + 0.5) * evenSmallerCubeSize - evenSmallerCubeSize / 2, (j + 0.5) * evenSmallerCubeSize - evenSmallerCubeSize / 2, (k + 0.5) * evenSmallerCubeSize - evenSmallerCubeSize / 2);
-                        smallCube.add(evenSmallerCube);
-                        evenSmallerCubes.push(evenSmallerCube);
-
-                        // Add outline to even smaller cubes
-                        const evenSmallerCubeEdgesGeometry = new THREE.EdgesGeometry(evenSmallerCubeGeometry);
-                        const evenSmallerCubeOutline = new THREE.LineSegments(evenSmallerCubeEdgesGeometry, outlineMaterial);
-                        evenSmallerCube.add(evenSmallerCubeOutline);
-
-                        // Initialize selection state
-                        evenSmallerCube.userData.selected = false;
-                    }
-                }
-            }
+            // Initialize selection state
+            smallCube.userData.selected = false;
         }
     }
 }
@@ -90,6 +70,9 @@ document.addEventListener('mousedown', handleMouseDown);
 document.addEventListener('mouseup', handleMouseUp);
 document.addEventListener('mousemove', handleMouseMove);
 document.addEventListener('click', handleMouseClick);
+
+// Event listener for key presses
+document.addEventListener('keydown', handleKeyPress);
 
 // Functions to handle mouse events
 function handleMouseDown(event) {
@@ -125,12 +108,69 @@ function handleMouseClick(event) {
     raycaster.setFromCamera(mouse, camera);
 
     // Calculate objects intersecting the raycaster
-    const intersects = raycaster.intersectObjects(evenSmallerCubes);
+    const intersects = raycaster.intersectObjects(smallerCubes);
 
     if (intersects.length > 0) {
+        // Unhighlight all cubes
+        smallerCubes.forEach(cube => {
+            cube.material = transparentMaterial;
+            cube.userData.selected = false;
+        });
+
+        // Highlight the clicked cube
         const intersectedObject = intersects[0].object;
-        intersectedObject.material = intersectedObject.userData.selected ? seeThroughMaterial : selectedMaterial;
-        intersectedObject.userData.selected = !intersectedObject.userData.selected;
+        intersectedObject.material = selectedMaterial;
+        intersectedObject.userData.selected = true;
+    }
+}
+
+// Function to handle key press events
+function handleKeyPress(event) {
+    let selectedCube = null;
+
+    // Find the selected cube
+    for (let i = 0; i < smallerCubes.length; i++) {
+        if (smallerCubes[i].userData.selected) {
+            selectedCube = smallerCubes[i];
+            break;
+        }
+    }
+
+    if (!selectedCube) return;
+
+    const cubeBounds = 4 * smallCubeSize;
+
+    switch (event.key) {
+        case 'a': // Move left
+            if (selectedCube.position.x - smallCubeSize >= -cubeBounds) {
+                selectedCube.position.x -= smallCubeSize;
+            }
+            break;
+        case 'd': // Move right
+            if (selectedCube.position.x + smallCubeSize <= cubeBounds) {
+                selectedCube.position.x += smallCubeSize;
+            }
+            break;
+        case 'w': // Move up
+            if (selectedCube.position.y + smallCubeSize <= cubeBounds) {
+                selectedCube.position.y += smallCubeSize;
+            }
+            break;
+        case 's': // Move down
+            if (selectedCube.position.y - smallCubeSize >= -cubeBounds) {
+                selectedCube.position.y -= smallCubeSize;
+            }
+            break;
+        case 'q': // Move backward
+            if (selectedCube.position.z - smallCubeSize >= -cubeBounds) {
+                selectedCube.position.z -= smallCubeSize;
+            }
+            break;
+        case 'e': // Move forward
+            if (selectedCube.position.z + smallCubeSize <= cubeBounds) {
+                selectedCube.position.z += smallCubeSize;
+            }
+            break;
     }
 }
 
