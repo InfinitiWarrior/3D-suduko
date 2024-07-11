@@ -71,6 +71,9 @@ document.addEventListener('mouseup', handleMouseUp);
 document.addEventListener('mousemove', handleMouseMove);
 document.addEventListener('click', handleMouseClick);
 
+// Event listener for key presses
+document.addEventListener('keydown', handleKeyPress);
+
 // Functions to handle mouse events
 function handleMouseDown(event) {
     mouseDown = true;
@@ -108,9 +111,66 @@ function handleMouseClick(event) {
     const intersects = raycaster.intersectObjects(smallerCubes);
 
     if (intersects.length > 0) {
+        // Unhighlight all cubes
+        smallerCubes.forEach(cube => {
+            cube.material = transparentMaterial;
+            cube.userData.selected = false;
+        });
+
+        // Highlight the clicked cube
         const intersectedObject = intersects[0].object;
-        intersectedObject.material = intersectedObject.userData.selected ? transparentMaterial : selectedMaterial;
-        intersectedObject.userData.selected = !intersectedObject.userData.selected;
+        intersectedObject.material = selectedMaterial;
+        intersectedObject.userData.selected = true;
+    }
+}
+
+// Function to handle key press events
+function handleKeyPress(event) {
+    let selectedCube = null;
+
+    // Find the selected cube
+    for (let i = 0; i < smallerCubes.length; i++) {
+        if (smallerCubes[i].userData.selected) {
+            selectedCube = smallerCubes[i];
+            break;
+        }
+    }
+
+    if (!selectedCube) return;
+
+    const cubeBounds = 4 * smallCubeSize;
+
+    switch (event.key) {
+        case 'a': // Move left
+            if (selectedCube.position.x - smallCubeSize >= -cubeBounds) {
+                selectedCube.position.x -= smallCubeSize;
+            }
+            break;
+        case 'd': // Move right
+            if (selectedCube.position.x + smallCubeSize <= cubeBounds) {
+                selectedCube.position.x += smallCubeSize;
+            }
+            break;
+        case 'w': // Move up
+            if (selectedCube.position.y + smallCubeSize <= cubeBounds) {
+                selectedCube.position.y += smallCubeSize;
+            }
+            break;
+        case 's': // Move down
+            if (selectedCube.position.y - smallCubeSize >= -cubeBounds) {
+                selectedCube.position.y -= smallCubeSize;
+            }
+            break;
+        case 'q': // Move backward
+            if (selectedCube.position.z - smallCubeSize >= -cubeBounds) {
+                selectedCube.position.z -= smallCubeSize;
+            }
+            break;
+        case 'e': // Move forward
+            if (selectedCube.position.z + smallCubeSize <= cubeBounds) {
+                selectedCube.position.z += smallCubeSize;
+            }
+            break;
     }
 }
 
