@@ -1,3 +1,6 @@
+// Import Three.js (add this if you are using a module-based environment)
+// import * as THREE from 'three';
+
 // Create a scene
 const scene = new THREE.Scene();
 
@@ -10,26 +13,29 @@ const renderer = new THREE.WebGLRenderer();
 renderer.setSize(window.innerWidth, window.innerHeight);
 document.body.appendChild(renderer.domElement);
 
+// Resize handling
+window.addEventListener('resize', () => {
+    camera.aspect = window.innerWidth / window.innerHeight;
+    camera.updateProjectionMatrix();
+    renderer.setSize(window.innerWidth, window.innerHeight);
+});
+
 // Define materials
 const transparentMaterial = new THREE.MeshBasicMaterial({ color: 0x000000, transparent: true, opacity: 0 });
 const outlineMaterial = new THREE.LineBasicMaterial({ color: 0xffffff });
-const selectedMaterial = new THREE.MeshBasicMaterial({ color: 0xff0000, transparent: false, opacity: 1 }); // Red color for selected state
+const selectedMaterial = new THREE.MeshBasicMaterial({ color: 0xff0000, transparent: false, opacity: 1 }); // Red for selected
 
-// Create a cube geometry for the main cube
+// Create main cube geometry and add to scene
 const geometry = new THREE.BoxGeometry(3, 3, 3);
-
-// Create the main cube
 const mainCube = new THREE.Mesh(geometry, transparentMaterial);
 scene.add(mainCube);
 
-// Create smaller cube geometry
+// Store smaller cubes
 const smallCubeSize = 1 / 3;
 const smallCubeGeometry = new THREE.BoxGeometry(smallCubeSize, smallCubeSize, smallCubeSize);
-
-// Store smaller cubes for raycasting
 const smallerCubes = [];
 
-// Create smaller cubes and position them inside the main cube
+// Create smaller cubes inside the main cube
 for (let x = -4; x <= 4; x++) {
     for (let y = -4; y <= 4; y++) {
         for (let z = -4; z <= 4; z++) {
@@ -38,7 +44,7 @@ for (let x = -4; x <= 4; x++) {
             mainCube.add(smallCube);
             smallerCubes.push(smallCube);
 
-            // Add outline to smaller cubes
+            // Outline for smaller cubes
             const smallCubeEdgesGeometry = new THREE.EdgesGeometry(smallCubeGeometry);
             const smallCubeOutline = new THREE.LineSegments(smallCubeEdgesGeometry, outlineMaterial);
             smallCube.add(smallCubeOutline);
@@ -49,32 +55,32 @@ for (let x = -4; x <= 4; x++) {
     }
 }
 
-// Create edges geometry for the outline of the main cube
+// Create main cube outline and synchronize rotation
 const edgesGeometry = new THREE.EdgesGeometry(geometry);
-
-// Create a mesh for the outline lines of the main cube
 const outlineLines = new THREE.LineSegments(edgesGeometry, outlineMaterial);
-scene.add(outlineLines);
+mainCube.add(outlineLines); // Add to main cube for consistent rotation
 
-// Variables to track mouse movement
+// Mouse variables
 let mouseDown = false;
 let lastMouseX = null;
 let lastMouseY = null;
 
-// Raycaster for detecting clicks
+// Raycaster setup
 const raycaster = new THREE.Raycaster();
 const mouse = new THREE.Vector2();
 
-// Event listeners for mouse events
+// Mouse events
 document.addEventListener('mousedown', handleMouseDown);
 document.addEventListener('mouseup', handleMouseUp);
 document.addEventListener('mousemove', handleMouseMove);
 document.addEventListener('click', handleMouseClick);
 
-// Event listener for key presses
+// Keyboard events
 document.addEventListener('keydown', handleKeyPress);
 
-// Functions to handle mouse events
+let selectedCubeIndex = -1;
+const tolerance = 0.001; // Set a tolerance for positional matching
+
 function handleMouseDown(event) {
     mouseDown = true;
     lastMouseX = event.clientX;
@@ -91,9 +97,9 @@ function handleMouseMove(event) {
     const deltaX = event.clientX - lastMouseX;
     const deltaY = event.clientY - lastMouseY;
 
-    // Rotate the entire scene instead of just the mainCube
-    scene.rotation.y += deltaX * 0.005; // Rotate around y-axis
-    scene.rotation.x += deltaY * 0.005; // Rotate around x-axis
+    // Rotate entire scene for interactive control
+    scene.rotation.y += deltaX * 0.005;
+    scene.rotation.x += deltaY * 0.005;
 
     lastMouseX = event.clientX;
     lastMouseY = event.clientY;
@@ -104,73 +110,74 @@ function handleMouseClick(event) {
     mouse.x = (event.clientX / window.innerWidth) * 2 - 1;
     mouse.y = -(event.clientY / window.innerHeight) * 2 + 1;
 
-    // Update the raycaster with the camera and mouse position
+    // Update raycaster
     raycaster.setFromCamera(mouse, camera);
 
-    // Calculate objects intersecting the raycaster
+    // Calculate intersecting objects
     const intersects = raycaster.intersectObjects(smallerCubes);
 
     if (intersects.length > 0) {
         // Unhighlight all cubes
-        smallerCubes.forEach(cube => {
-            cube.material = transparentMaterial;
-            cube.userData.selected = false;
-        });
+        if (selectedCubeIndex !== -1) {
+            smallerCubes[selectedCubeIndex].material = transparentMaterial;
+            smallerCubes[selectedCubeIndex].userData.selected = false;
+        }
 
         // Highlight the clicked cube
-        const intersectedObject = intersects[0].object;
-        intersectedObject.material = selectedMaterial;
-        intersectedObject.userData.selected = true;
+        selectedCubeIndex = smallerCubes.indexOf(intersects[0].object);
+        smallerCubes[selectedCubeIndex].material = selectedMaterial;
+        smallerCubes[selectedCubeIndex].userData.selected = true;
     }
 }
 
-// Function to handle key press events
+// Helper function to compare positions with a tolerance
+function positionsMatch(pos1, pos2) {
+    return Math.abs(pos1.x - pos2.x) < tolerance &&
+           Math.abs(pos1.y - pos2.y) < tolerance &&
+           Math.abs(pos1.z - pos2.z) < tolerance;
+}
+
 function handleKeyPress(event) {
-    let selectedCube = null;
+    if (selectedCubeIndex === -1) return;
 
-    // Find the selected cube
-    for (let i = 0; i < smallerCubes.length; i++) {
-        if (smallerCubes[i].userData.selected) {
-            selectedCube = smallerCubes[i];
-            break;
-        }
-    }
-
-    if (!selectedCube) return;
-
-    const cubeBounds = 4 * smallCubeSize;
+    const { x, y, z } = smallerCubes[selectedCubeIndex].position;
+    let newX = x, newY = y, newZ = z;
 
     switch (event.key) {
-        case 'a': // Move left
-            if (selectedCube.position.x - smallCubeSize >= -cubeBounds) {
-                selectedCube.position.x -= smallCubeSize;
-            }
+        case 'a':
+            newX -= smallCubeSize;
             break;
-        case 'd': // Move right
-            if (selectedCube.position.x + smallCubeSize <= cubeBounds) {
-                selectedCube.position.x += smallCubeSize;
-            }
+        case 'd':
+            newX += smallCubeSize;
             break;
-        case 'w': // Move up
-            if (selectedCube.position.y + smallCubeSize <= cubeBounds) {
-                selectedCube.position.y += smallCubeSize;
-            }
+        case 'w':
+            newY += smallCubeSize;
             break;
-        case 's': // Move down
-            if (selectedCube.position.y - smallCubeSize >= -cubeBounds) {
-                selectedCube.position.y -= smallCubeSize;
-            }
+        case 's':
+            newY -= smallCubeSize;
             break;
-        case 'q': // Move backward
-            if (selectedCube.position.z - smallCubeSize >= -cubeBounds) {
-                selectedCube.position.z -= smallCubeSize;
-            }
+        case 'q':
+            newZ -= smallCubeSize;
             break;
-        case 'e': // Move forward
-            if (selectedCube.position.z + smallCubeSize <= cubeBounds) {
-                selectedCube.position.z += smallCubeSize;
-            }
+        case 'e':
+            newZ += smallCubeSize;
             break;
+    }
+
+    // Find the new cube based on the updated coordinates with tolerance
+    const newSelectedCube = smallerCubes.find(cube =>
+        positionsMatch(cube.position, { x: newX, y: newY, z: newZ })
+    );
+
+    if (newSelectedCube) {
+        // Unhighlight the current cube
+        smallerCubes[selectedCubeIndex].material = transparentMaterial;
+        smallerCubes[selectedCubeIndex].userData.selected = false;
+
+        // Update to the new cube
+        selectedCubeIndex = smallerCubes.indexOf(newSelectedCube);
+        newSelectedCube.material = selectedMaterial;
+        newSelectedCube.userData.selected = true;
     }
 }
 
