@@ -35,7 +35,23 @@ const smallCubeSize = 1 / 3;
 const smallCubeGeometry = new THREE.BoxGeometry(smallCubeSize, smallCubeSize, smallCubeSize);
 const smallerCubes = [];
 
-// Create smaller cubes inside the main cube
+function createTextTexture(number) {
+    const canvas = document.createElement('canvas');
+    const context = canvas.getContext('2d');
+    canvas.width = 64;
+    canvas.height = 64;
+
+    context.fillStyle = '#ffffff';
+    context.font = '40px Arial';
+    context.textAlign = 'center';
+    context.textBaseline = 'middle';
+    context.fillText(number, canvas.width / 2, canvas.height / 2);
+
+    const texture = new THREE.CanvasTexture(canvas);
+    return texture;
+}
+
+// Create smaller cubes with fewer pre-filled numbers
 for (let x = -4; x <= 4; x++) {
     for (let y = -4; y <= 4; y++) {
         for (let z = -4; z <= 4; z++) {
@@ -49,8 +65,23 @@ for (let x = -4; x <= 4; x++) {
             const smallCubeOutline = new THREE.LineSegments(smallCubeEdgesGeometry, outlineMaterial);
             smallCube.add(smallCubeOutline);
 
-            // Initialize selection state
-            smallCube.userData.selected = false;
+            // Create number label randomly for only a subset of cubes
+            if (Math.random() < 0.3) { // 30% chance to assign a number
+                const number = Math.floor(Math.random() * 9) + 1; // Random number between 1 and 9
+                const textTexture = createTextTexture(number);
+
+                const textMaterial = new THREE.SpriteMaterial({
+                    map: textTexture,
+                    depthTest: false,
+                    opacity: 0.85
+                
+                });
+                const textSprite = new THREE.Sprite(textMaterial);
+
+                textSprite.scale.set(0.3, 0.3, 0.3);  // Adjust size as needed
+                textSprite.position.set(0, 0, smallCubeSize - 0.35);  // Offset to sit slightly in front
+                smallCube.add(textSprite);
+            }
         }
     }
 }
