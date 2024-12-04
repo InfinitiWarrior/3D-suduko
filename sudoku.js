@@ -35,6 +35,62 @@ const smallCubeSize = 1 / 3;
 const smallCubeGeometry = new THREE.BoxGeometry(smallCubeSize, smallCubeSize, smallCubeSize);
 const smallerCubes = [];
 
+// 3D Sudoku Grid Size
+const gridSize = 9;
+let sudokuGrid = Array.from({ length: gridSize }, () => 
+    Array.from({ length: gridSize }, () => Array(gridSize).fill(0))
+);
+
+// Check if placing a number in the grid follows Sudoku rules
+function isSafeToPlace(x, y, z, number) {
+    for (let i = 0; i < gridSize; i++) {
+        if (sudokuGrid[x][y][i] === number || sudokuGrid[x][i][z] === number || sudokuGrid[i][y][z] === number) {
+            return false;
+        }
+    }
+    return true;
+}
+
+// Recursive backtracking function to solve the Sudoku
+function solve3DSudoku(x = 0, y = 0, z = 0) {
+    if (x === gridSize) return true; // Completed the grid
+
+    let [nextX, nextY, nextZ] = getNextPosition(x, y, z);
+
+    // Skip cells with pre-filled numbers
+    if (sudokuGrid[x][y][z] !== 0) return solve3DSudoku(nextX, nextY, nextZ);
+
+    for (let num = 1; num <= gridSize; num++) {
+        if (isSafeToPlace(x, y, z, num)) {
+            sudokuGrid[x][y][z] = num; // Place number
+
+            if (solve3DSudoku(nextX, nextY, nextZ)) return true; // Move forward
+
+            sudokuGrid[x][y][z] = 0; // Backtrack
+        }
+    }
+    return false; // Trigger backtracking
+}
+
+// Helper to find the next position in 3D
+function getNextPosition(x, y, z) {
+    if (z + 1 < gridSize) return [x, y, z + 1];
+    if (y + 1 < gridSize) return [x, y + 1, 0];
+    return [x + 1, 0, 0];
+}
+
+// Generate the initial grid and solve it
+function generateAndSolve3DSudoku() {
+    // You can initialize a random 3D Sudoku board here with valid constraints
+    solve3DSudoku();
+    return sudokuGrid;
+}
+
+// Initialize and solve the 3D Sudoku grid
+const solvedSudokuGrid = generateAndSolve3DSudoku();
+console.log(solvedSudokuGrid);
+
+// Create smaller cubes and add numbers from solved 3D Sudoku grid
 function createTextTexture(number) {
     const canvas = document.createElement('canvas');
     const context = canvas.getContext('2d');
@@ -51,12 +107,12 @@ function createTextTexture(number) {
     return texture;
 }
 
-// Create smaller cubes with fewer pre-filled numbers
-for (let x = -4; x <= 4; x++) {
-    for (let y = -4; y <= 4; y++) {
-        for (let z = -4; z <= 4; z++) {
+// Render the 3D grid with numbers from solvedSudokuGrid
+for (let x = 0; x < gridSize; x++) {
+    for (let y = 0; y < gridSize; y++) {
+        for (let z = 0; z < gridSize; z++) {
             const smallCube = new THREE.Mesh(smallCubeGeometry, transparentMaterial);
-            smallCube.position.set(x * smallCubeSize, y * smallCubeSize, z * smallCubeSize);
+            smallCube.position.set((x - 4) * smallCubeSize, (y - 4) * smallCubeSize, (z - 4) * smallCubeSize);
             mainCube.add(smallCube);
             smallerCubes.push(smallCube);
 
@@ -65,21 +121,20 @@ for (let x = -4; x <= 4; x++) {
             const smallCubeOutline = new THREE.LineSegments(smallCubeEdgesGeometry, outlineMaterial);
             smallCube.add(smallCubeOutline);
 
-            // Create number label randomly for only a subset of cubes
-            if (Math.random() < 0.3) { // 30% chance to assign a number
-                const number = Math.floor(Math.random() * 9) + 1; // Random number between 1 and 9
+            // Display the number on the cube if present in solved grid
+            const number = solvedSudokuGrid[x][y][z];
+            if (number !== 0) {
                 const textTexture = createTextTexture(number);
 
                 const textMaterial = new THREE.SpriteMaterial({
                     map: textTexture,
                     depthTest: false,
                     opacity: 0.85
-                
                 });
                 const textSprite = new THREE.Sprite(textMaterial);
 
-                textSprite.scale.set(0.3, 0.3, 0.3);  // Adjust size as needed
-                textSprite.position.set(0, 0, smallCubeSize - 0.35);  // Offset to sit slightly in front
+                textSprite.scale.set(0.3, 0.3, 0.3);
+                textSprite.position.set(0, 0, smallCubeSize - 0.35);
                 smallCube.add(textSprite);
             }
         }
