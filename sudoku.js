@@ -181,7 +181,11 @@ window.onload = function () {
         for (let x = 0; x < SIZE; x++) {
             for (let y = 0; y < SIZE; y++) {
                 for (let z = 0; z < SIZE; z++) {
-                    const c = new THREE.Mesh(geom, MAT_EMPTY);
+                const mat = MAT_EMPTY.clone();
+                mat.depthTest = false;
+                mat.depthWrite = false;
+
+                const c = new THREE.Mesh(geom, mat);
                     c.position.set(pos(x), pos(y), pos(z));
                     c.userData = {
                         x, y, z,
@@ -201,6 +205,8 @@ window.onload = function () {
 
                     mainCube.add(c);
                     cells.push(c);
+                    c.renderOrder = c.userData.z;
+
                 }
             }
         }
@@ -214,16 +220,20 @@ window.onload = function () {
     let dimensionT = 0;
 
     function get2DGridPosition(x, y, z) {
-        const boardSpacing = CELL * 11;
-        const gridX = z % 3;
-        const gridY = Math.floor(z / 3);
+    const boardSpacing = CELL * 11;
+    const gridX = z % 3;
+    const gridY = Math.floor(z / 3);
 
-        return new THREE.Vector3(
-            (gridX - 1) * boardSpacing + (x - 4) * CELL,
-            (1 - gridY) * boardSpacing + (4 - y) * CELL,
-            0
-        );
-    }
+    const Z_EPSILON = 0.0005; // 👈 critical
+    const zOffset = (z - 4) * Z_EPSILON;
+
+    return new THREE.Vector3(
+        (gridX - 1) * boardSpacing + (x - 4) * CELL,
+        (1 - gridY) * boardSpacing + (4 - y) * CELL,
+        zOffset
+    );
+}
+
 
     dimensionBtn.onclick = () => {
     if (dimensionAnimating) return;
@@ -268,27 +278,57 @@ window.onload = function () {
        HIGHLIGHTING + INPUT
     ========================== */
     let selected = null;
+    const OPACITY_SELECTED = 0.6;
+    const OPACITY_LINE     = 0.25;
+    const OPACITY_MATCH    = 0.08;
 
-    function clearHighlights() {
-        cells.forEach(c => c.material = MAT_EMPTY);
-        if (selected) selected.material = MAT_SELECTED;
-    }
 
     function highlightFromSelected() {
-        clearHighlights();
-        if (!selected || selected.userData.value === 0) return;
-
-        const n = selected.userData.value;
-        for (const src of cells.filter(c => c.userData.value === n)) {
-            const { x, y, z } = src.userData;
-            for (let i = 0; i < SIZE; i++) {
-                cells[idx(x, y, i)].material = MAT_LINE;
-                cells[idx(x, i, z)].material = MAT_LINE;
-                cells[idx(i, y, z)].material = MAT_LINE;
-            }
-        }
-        selected.material = MAT_SELECTED;
+    // reset visuals
+    for (const c of cells) {
+        c.material.opacity = 0;
+        c.material.color.set(0xffffff);
     }
+
+    if (!selected) return;
+
+    // ALWAYS show selected cell
+    selected.material.opacity = OPACITY_SELECTED;
+    selected.material.color.set(0xff4444);
+
+    // if empty cell, stop here
+    if (selected.userData.value === 0) return;
+
+    const n = selected.userData.value;
+
+    // all same-number cells generate their own "+"
+    const sources = cells.filter(c => c.userData.value === n);
+
+    for (const src of sources) {
+        const { x, y, z } = src.userData;
+
+        for (let i = 0; i < SIZE; i++) {
+            const cx = cells[idx(x, y, i)];
+            const cy = cells[idx(x, i, z)];
+            const cz = cells[idx(i, y, z)];
+
+            cx.material.opacity = OPACITY_LINE;
+            cy.material.opacity = OPACITY_LINE;
+            cz.material.opacity = OPACITY_LINE;
+
+            cx.material.color.set(0x6666ff);
+            cy.material.color.set(0x6666ff);
+            cz.material.color.set(0x6666ff);
+        }
+    }
+
+    // reassert selected so it always wins
+    selected.material.opacity = OPACITY_SELECTED;
+    selected.material.color.set(0xff4444);
+}
+
+
+
 
     const raycaster = new THREE.Raycaster();
     const mouse = new THREE.Vector2();
@@ -400,8 +440,8 @@ document.addEventListener("keydown", e => {
 
     if (e.key === "a") nx--;
     if (e.key === "d") nx++;
-    if (e.key === "w") ny++;
-    if (e.key === "s") ny--;
+    if (e.key === "w") ny--;
+    if (e.key === "s") ny++;
     if (e.key === "q") nz--;
     if (e.key === "e") nz++;
 
@@ -519,8 +559,11 @@ document.addEventListener("keydown", e => {
 
                 if (dimensionMode === "2D") {
                     c.position.lerpVectors(homePosition, target, a);
+                    c.renderOrder = 10 + c.userData.z;
+
                 } else {
                     c.position.lerpVectors(target, homePosition, a);
+                    c.renderOrder = 0;
                 }
             }
 
