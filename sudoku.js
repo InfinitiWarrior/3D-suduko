@@ -1,278 +1,419 @@
-window.onload = function() {
-    // Create a scene
-    const scene = new THREE.Scene();
+window.onload = function () {
 
-    // Create a camera
-    const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+    /* =========================
+       SCORE + UI
+    ========================== */
+    let score = 0;
+
+    const ui = document.createElement("div");
+    ui.style.position = "fixed";
+    ui.style.top = "10px";
+    ui.style.left = "10px";
+    ui.style.color = "white";
+    ui.style.fontFamily = "Arial";
+    ui.style.zIndex = "1000";
+
+    const scoreDiv = document.createElement("div");
+    scoreDiv.style.fontSize = "20px";
+    scoreDiv.innerText = "Score: 0";
+
+    const restartBtn = document.createElement("button");
+    restartBtn.innerText = "Restart";
+    restartBtn.style.marginTop = "8px";
+    restartBtn.style.fontSize = "16px";
+    restartBtn.style.cursor = "pointer";
+
+    ui.appendChild(scoreDiv);
+    ui.appendChild(restartBtn);
+    document.body.appendChild(ui);
+
+    function updateScore(delta) {
+        score += delta;
+        scoreDiv.innerText = `Score: ${score}`;
+    }
+
+    /* =========================
+       THREE SETUP
+    ========================== */
+    const scene = new THREE.Scene();
+    const camera = new THREE.PerspectiveCamera(75, innerWidth / innerHeight, 0.1, 1000);
     camera.position.z = 5;
 
-    // Create a renderer
-    const renderer = new THREE.WebGLRenderer();
-    renderer.setSize(window.innerWidth, window.innerHeight);
+    const renderer = new THREE.WebGLRenderer({ antialias: true });
+    renderer.setSize(innerWidth, innerHeight);
     document.body.appendChild(renderer.domElement);
 
-    // Resize handling
-    window.addEventListener('resize', () => {
-        camera.aspect = window.innerWidth / window.innerHeight;
+    window.addEventListener("resize", () => {
+        camera.aspect = innerWidth / innerHeight;
         camera.updateProjectionMatrix();
-        renderer.setSize(window.innerWidth, window.innerHeight);
+        renderer.setSize(innerWidth, innerHeight);
     });
 
-    // Define materials
-    const transparentMaterial = new THREE.MeshBasicMaterial({ color: 0x000000, transparent: true, opacity: 0 });
-    const outlineMaterial = new THREE.LineBasicMaterial({ color: 0xffffff });
-    const selectedMaterial = new THREE.MeshBasicMaterial({ color: 0xff0000, transparent: false, opacity: 1 }); // Red for selected
+    /* =========================
+       MATERIALS
+    ========================== */
+    const MAT_EMPTY = new THREE.MeshBasicMaterial({ transparent: true, opacity: 0 });
+    const MAT_SELECTED = new THREE.MeshBasicMaterial({ color: 0xff4444 });
+    const MAT_LINE = new THREE.MeshBasicMaterial({
+        color: 0x6666ff,
+        transparent: true,
+        opacity: 0.25
+    });
+    const OUTLINE = new THREE.LineBasicMaterial({ color: 0xffffff });
 
-    // Create main cube geometry and add to scene
-    const geometry = new THREE.BoxGeometry(3, 3, 3);
-    const mainCube = new THREE.Mesh(geometry, transparentMaterial);
+    /* =========================
+       MAIN CUBE
+    ========================== */
+    const cubeGeom = new THREE.BoxGeometry(3, 3, 3);
+    const mainCube = new THREE.Mesh(cubeGeom, MAT_EMPTY);
     scene.add(mainCube);
+    mainCube.add(new THREE.LineSegments(new THREE.EdgesGeometry(cubeGeom), OUTLINE));
 
-    // Store smaller cubes
-    const smallCubeSize = 1 / 3;
-    const smallCubeGeometry = new THREE.BoxGeometry(smallCubeSize, smallCubeSize, smallCubeSize);
-    const smallerCubes = [];
+    /* =========================
+       GRID
+    ========================== */
+    const SIZE = 9;
+    const CELL = 1 / 3;
 
-    // 3D Sudoku Grid Size
-    const gridSize = 9;
-    let sudokuGrid = Array.from({ length: gridSize }, () => 
-        Array.from({ length: gridSize }, () => Array(gridSize).fill(0))
-    );
+    let grid, initialGrid;
 
-    // Check if placing a number in the grid follows Sudoku rules
-    function isSafeToPlace(x, y, z, number) {
-        for (let i = 0; i < gridSize; i++) {
-            if (sudokuGrid[x][y][i] === number || sudokuGrid[x][i][z] === number || sudokuGrid[i][y][z] === number) {
-                return false;
-            }
+    function newGrid() {
+        grid = Array.from({ length: SIZE }, () =>
+            Array.from({ length: SIZE }, () => Array(SIZE).fill(0))
+        );
+    }
+
+    function isValid(x, y, z, n) {
+        for (let i = 0; i < SIZE; i++) {
+            if (
+                grid[x][y][i] === n ||
+                grid[x][i][z] === n ||
+                grid[i][y][z] === n
+            ) return false;
         }
         return true;
     }
 
-    // Recursive backtracking function to solve the Sudoku
-    function solve3DSudoku(x = 0, y = 0, z = 0) {
-        if (x === gridSize) return true; // Completed the grid
+    function hasAnyCandidate(x, y, z) {
+        for (let n = 1; n <= 9; n++) {
+            if (isValid(x, y, z, n)) return true;
+        }
+        return false;
+    }
 
-        let [nextX, nextY, nextZ] = getNextPosition(x, y, z);
-
-        // Skip cells with pre-filled numbers
-        if (sudokuGrid[x][y][z] !== 0) return solve3DSudoku(nextX, nextY, nextZ);
-
-        for (let num = 1; num <= gridSize; num++) {
-            if (isSafeToPlace(x, y, z, num)) {
-                sudokuGrid[x][y][z] = num; // Place number
-
-                if (solve3DSudoku(nextX, nextY, nextZ)) return true; // Move forward
-
-                sudokuGrid[x][y][z] = 0; // Backtrack
+    function createsDeadEnd(x0, y0, z0) {
+        for (let i = 0; i < SIZE; i++) {
+            const checks = [
+                [x0, y0, i],
+                [x0, i, z0],
+                [i, y0, z0]
+            ];
+            for (const [x, y, z] of checks) {
+                if (grid[x][y][z] === 0 && !hasAnyCandidate(x, y, z)) {
+                    return true;
+                }
             }
         }
-        return false; // Trigger backtracking
+        return false;
     }
 
-    // Helper to find the next position in 3D
-    function getNextPosition(x, y, z) {
-        if (z + 1 < gridSize) return [x, y, z + 1];
-        if (y + 1 < gridSize) return [x, y + 1, 0];
-        return [x + 1, 0, 0];
+    function seed(count = 60) {
+        let placed = 0;
+        while (placed < count) {
+            const x = Math.floor(Math.random() * SIZE);
+            const y = Math.floor(Math.random() * SIZE);
+            const z = Math.floor(Math.random() * SIZE);
+            const n = Math.floor(Math.random() * 9) + 1;
+
+            if (grid[x][y][z] === 0 && isValid(x, y, z, n)) {
+                grid[x][y][z] = n;
+                placed++;
+            }
+        }
     }
 
-    // Generate the initial grid and solve it
-    function generateAndSolve3DSudoku() {
-        // You can initialize a random 3D Sudoku board here with valid constraints
-        solve3DSudoku();
-        return sudokuGrid;
+    /* =========================
+       NUMBER SPRITES
+    ========================== */
+    function numberSprite(n) {
+        const c = document.createElement("canvas");
+        const ctx = c.getContext("2d");
+        c.width = c.height = 64;
+
+        ctx.fillStyle = "#fff";
+        ctx.font = "40px Arial";
+        ctx.textAlign = "center";
+        ctx.textBaseline = "middle";
+        ctx.fillText(n, 32, 32);
+
+        const tex = new THREE.CanvasTexture(c);
+        const mat = new THREE.SpriteMaterial({
+            map: tex,
+            transparent: true,
+            depthTest: false,
+            depthWrite: false
+        });
+
+        const spr = new THREE.Sprite(mat);
+        spr.scale.set(0.3, 0.3, 0.3);
+        spr.position.set(0, 0, 0);
+        return spr;
     }
 
-    // Initialize and solve the 3D Sudoku grid
-    const solvedSudokuGrid = generateAndSolve3DSudoku();
-    console.log(solvedSudokuGrid);
+    /* =========================
+       CELLS
+    ========================== */
+    const geom = new THREE.BoxGeometry(CELL, CELL, CELL);
+    const cells = [];
 
-    // Create smaller cubes and add numbers from solved 3D Sudoku grid
-    function createTextTexture(number) {
-        const canvas = document.createElement('canvas');
-        const context = canvas.getContext('2d');
-        canvas.width = 64;
-        canvas.height = 64;
+    const pos = i => (i - 4) * CELL;
+    const idx = (x, y, z) => x * 81 + y * 9 + z;
 
-        context.fillStyle = '#ffffff';
-        context.font = '40px Arial';
-        context.textAlign = 'center';
-        context.textBaseline = 'middle';
-        context.fillText(number, canvas.width / 2, canvas.height / 2);
+    function buildCells() {
+        cells.length = 0;
+        mainCube.clear();
+        mainCube.add(new THREE.LineSegments(new THREE.EdgesGeometry(cubeGeom), OUTLINE));
 
-        const texture = new THREE.CanvasTexture(canvas);
-        return texture;
-    }
+        for (let x = 0; x < SIZE; x++) {
+            for (let y = 0; y < SIZE; y++) {
+                for (let z = 0; z < SIZE; z++) {
+                    const c = new THREE.Mesh(geom, MAT_EMPTY);
+                    c.position.set(pos(x), pos(y), pos(z));
+                    c.userData = {
+                        x, y, z,
+                        value: grid[x][y][z],
+                        initial: grid[x][y][z],
+                        label: null
+                    };
 
-    // Render the 3D grid with numbers from solvedSudokuGrid
-    for (let x = 0; x < gridSize; x++) {
-        for (let y = 0; y < gridSize; y++) {
-            for (let z = 0; z < gridSize; z++) {
-                const smallCube = new THREE.Mesh(smallCubeGeometry, transparentMaterial);
-                smallCube.position.set((x - 4) * smallCubeSize, (y - 4) * smallCubeSize, (z - 4) * smallCubeSize);
-                mainCube.add(smallCube);
-                smallerCubes.push(smallCube);
+                    c.add(new THREE.LineSegments(new THREE.EdgesGeometry(geom), OUTLINE));
 
-                // Outline for smaller cubes
-                const smallCubeEdgesGeometry = new THREE.EdgesGeometry(smallCubeGeometry);
-                const smallCubeOutline = new THREE.LineSegments(smallCubeEdgesGeometry, outlineMaterial);
-                smallCube.add(smallCubeOutline);
+                    if (grid[x][y][z] !== 0) {
+                        const s = numberSprite(grid[x][y][z]);
+                        c.add(s);
+                        c.userData.label = s;
+                    }
 
-                // Display the number on the cube if present in solved grid
-                const number = solvedSudokuGrid[x][y][z];
-                if (number !== 0) {
-                    const textTexture = createTextTexture(number);
-
-                    const textMaterial = new THREE.SpriteMaterial({
-                        map: textTexture,
-                        depthTest: false,
-                        opacity: 0.85
-                    });
-                    const textSprite = new THREE.Sprite(textMaterial);
-
-                    textSprite.scale.set(0.3, 0.3, 0.3);
-                    textSprite.position.set(0, 0, smallCubeSize - 0.35);
-                    smallCube.add(textSprite);
+                    mainCube.add(c);
+                    cells.push(c);
                 }
             }
         }
     }
 
-    // Create main cube outline and synchronize rotation
-    const edgesGeometry = new THREE.EdgesGeometry(geometry);
-    const outlineLines = new THREE.LineSegments(edgesGeometry, outlineMaterial);
-    mainCube.add(outlineLines); // Add to main cube for consistent rotation
+    /* =========================
+       HIGHLIGHTING
+    ========================== */
+    let selected = null;
 
-    // Mouse variables
-    let mouseDown = false;
-    let lastMouseX = null;
-    let lastMouseY = null;
+    function clearHighlights() {
+        cells.forEach(c => c.material = MAT_EMPTY);
+        if (selected) selected.material = MAT_SELECTED;
+    }
 
-    // Raycaster setup
+    function highlightFromSelected() {
+        clearHighlights();
+        if (!selected || selected.userData.value === 0) return;
+
+        const n = selected.userData.value;
+        for (const src of cells.filter(c => c.userData.value === n)) {
+            const { x, y, z } = src.userData;
+            for (let i = 0; i < SIZE; i++) {
+                cells[idx(x, y, i)].material = MAT_LINE;
+                cells[idx(x, i, z)].material = MAT_LINE;
+                cells[idx(i, y, z)].material = MAT_LINE;
+            }
+        }
+        selected.material = MAT_SELECTED;
+    }
+
+    /* =========================
+       INPUT
+    ========================== */
     const raycaster = new THREE.Raycaster();
     const mouse = new THREE.Vector2();
 
-    // Mouse events
-    document.addEventListener('mousedown', handleMouseDown);
-    document.addEventListener('mouseup', handleMouseUp);
-    document.addEventListener('mousemove', handleMouseMove);
-    document.addEventListener('click', handleMouseClick);
-
-    // Keyboard events
-    document.addEventListener('keydown', handleKeyPress);
-
-    let selectedCubeIndex = -1;
-    const tolerance = 0.001; // Set a tolerance for positional matching
-
-    function handleMouseDown(event) {
-        mouseDown = true;
-        lastMouseX = event.clientX;
-        lastMouseY = event.clientY;
-    }
-
-    function handleMouseUp() {
-        mouseDown = false;
-    }
-
-    function handleMouseMove(event) {
-        if (!mouseDown) return;
-
-        const deltaX = event.clientX - lastMouseX;
-        const deltaY = event.clientY - lastMouseY;
-
-        // Rotate entire scene for interactive control
-        scene.rotation.y += deltaX * 0.005;
-        scene.rotation.x += deltaY * 0.005;
-
-        lastMouseX = event.clientX;
-        lastMouseY = event.clientY;
-    }
-
-    function handleMouseClick(event) {
-        // Calculate mouse position in normalized device coordinates
-        mouse.x = (event.clientX / window.innerWidth) * 2 - 1;
-        mouse.y = -(event.clientY / window.innerHeight) * 2 + 1;
-
-        // Update raycaster
+    document.addEventListener("click", e => {
+        mouse.x = (e.clientX / innerWidth) * 2 - 1;
+        mouse.y = -(e.clientY / innerHeight) * 2 + 1;
         raycaster.setFromCamera(mouse, camera);
+        const hit = raycaster.intersectObjects(cells)[0];
+        if (hit) {
+            selected = hit.object;
+            highlightFromSelected();
+        }
+    });
 
-        // Calculate intersecting objects
-        const intersects = raycaster.intersectObjects(smallerCubes);
+    document.addEventListener("keydown", e => {
+        if (!selected) return;
+        const { x, y, z, value, initial } = selected.userData;
 
-        if (intersects.length > 0) {
-            // Unhighlight all cubes
-            if (selectedCubeIndex !== -1) {
-                smallerCubes[selectedCubeIndex].material = transparentMaterial;
-                smallerCubes[selectedCubeIndex].userData.selected = false;
+        if (e.key >= "1" && e.key <= "9") {
+            const n = parseInt(e.key);
+            if (!isValid(x, y, z, n)) {
+                updateScore(-100);
+                return;
             }
 
-            // Highlight the clicked cube
-            selectedCubeIndex = smallerCubes.indexOf(intersects[0].object);
-            smallerCubes[selectedCubeIndex].material = selectedMaterial;
-            smallerCubes[selectedCubeIndex].userData.selected = true;
-        }
-    }
+            const prev = value;
+            grid[x][y][z] = n;
+            if (createsDeadEnd(x, y, z)) {
+                grid[x][y][z] = prev;
+                updateScore(-100);
+                return;
+            }
 
-    // Helper function to compare positions with a tolerance
-    function positionsMatch(pos1, pos2) {
-        return Math.abs(pos1.x - pos2.x) < tolerance &&
-            Math.abs(pos1.y - pos2.y) < tolerance &&
-            Math.abs(pos1.z - pos2.z) < tolerance;
-    }
+            selected.userData.value = n;
 
-    function handleKeyPress(event) {
-        if (selectedCubeIndex === -1) return;
+            if (selected.userData.label)
+                selected.remove(selected.userData.label);
 
-        const { x, y, z } = smallerCubes[selectedCubeIndex].position;
-        let newX = x, newY = y, newZ = z;
+            selected.userData.label = numberSprite(n);
+            selected.add(selected.userData.label);
 
-        switch (event.key) {
-            case 'a':
-                newX -= smallCubeSize;
-                break;
-            case 'd':
-                newX += smallCubeSize;
-                break;
-            case 'w':
-                newY += smallCubeSize;
-                break;
-            case 's':
-                newY -= smallCubeSize;
-                break;
-            case 'q':
-                newZ -= smallCubeSize;
-                break;
-            case 'e':
-                newZ += smallCubeSize;
-                break;
+            if (prev === 0 && initial === 0) updateScore(100);
+            else if (prev !== n && initial !== n) updateScore(50);
+
+            highlightFromSelected();
         }
 
-        // Find the new cube based on the updated coordinates with tolerance
-        const newSelectedCube = smallerCubes.find(cube =>
-            positionsMatch(cube.position, { x: newX, y: newY, z: newZ })
-        );
-
-        if (newSelectedCube) {
-            // Unhighlight the current cube
-            smallerCubes[selectedCubeIndex].material = transparentMaterial;
-            smallerCubes[selectedCubeIndex].userData.selected = false;
-
-            // Update to the new cube
-            selectedCubeIndex = smallerCubes.indexOf(newSelectedCube);
-            newSelectedCube.material = selectedMaterial;
-            newSelectedCube.userData.selected = true;
+        if (e.key === "Backspace" || e.key === "0") {
+            if (value !== 0) {
+                grid[x][y][z] = 0;
+                selected.userData.value = 0;
+                selected.remove(selected.userData.label);
+                selected.userData.label = null;
+                highlightFromSelected();
+            }
         }
+    });
+
+    /* =========================
+       MOVEMENT
+    ========================== */
+    const EPS = 0.001;
+    const same = (a, b) =>
+        Math.abs(a.x - b.x) < EPS &&
+        Math.abs(a.y - b.y) < EPS &&
+        Math.abs(a.z - b.z) < EPS;
+
+    document.addEventListener("keydown", e => {
+        if (!selected) return;
+
+        let { x, y, z } = selected.position;
+        if (e.key === "a") x -= CELL;
+        if (e.key === "d") x += CELL;
+        if (e.key === "w") y += CELL;
+        if (e.key === "s") y -= CELL;
+        if (e.key === "q") z -= CELL;
+        if (e.key === "e") z += CELL;
+
+        const next = cells.find(c => same(c.position, { x, y, z }));
+        if (next) {
+            selected = next;
+            highlightFromSelected();
+        }
+    });
+
+    /* =========================
+       RESTART
+    ========================== */
+    function restart() {
+        score = 0;
+        updateScore(0);
+        selected = null;
+        newGrid();
+        seed();
+        initialGrid = JSON.parse(JSON.stringify(grid));
+        buildCells();
     }
 
-    // Render the scene
+    restartBtn.onclick = restart;
+
+    /* =========================
+       INIT
+    ========================== */
+    newGrid();
+    seed();
+    initialGrid = JSON.parse(JSON.stringify(grid));
+    buildCells();
+
+    window.dispatchEvent(new MessageEvent("message", { data: "Cube Loaded" }));
+
+    /* =========================
+    CAMERA CONTROLS
+    ========================== */
+    let camRadius = 4;
+    let camTheta = Math.PI / 2; // facing +Z
+    let camPhi = Math.PI / 2;   // level (no tilt)
+
+
+    function updateCamera() {
+        camPhi = Math.max(0.1, Math.min(Math.PI - 0.1, camPhi));
+
+        camera.position.x = camRadius * Math.sin(camPhi) * Math.cos(camTheta);
+        camera.position.y = camRadius * Math.cos(camPhi);
+        camera.position.z = camRadius * Math.sin(camPhi) * Math.sin(camTheta);
+
+        camera.lookAt(0, 0, 0);
+    }
+
+    updateCamera();
+
+    let dragging = false;
+    let lastX = 0;
+    let lastY = 0;
+
+    document.addEventListener("mousedown", e => {
+        dragging = true;
+        lastX = e.clientX;
+        lastY = e.clientY;
+    });
+
+    document.addEventListener("mouseup", () => dragging = false);
+    document.addEventListener("mouseleave", () => dragging = false);
+
+    document.addEventListener("mousemove", e => {
+        if (!dragging) return;
+
+        const dx = e.clientX - lastX;
+        const dy = e.clientY - lastY;
+
+        camTheta += dx * 0.005;   // left-right drag
+        camPhi   -= dy * 0.005;   // up-down drag
+
+
+        lastX = e.clientX;
+        lastY = e.clientY;
+
+        updateCamera();
+    });
+    
+    document.addEventListener("wheel", e => {
+    camRadius += e.deltaY * 0.01;
+    camRadius = Math.max(3, Math.min(15, camRadius));
+    updateCamera();
+    });
+
+    document.addEventListener("keydown", e => {
+    if (e.key === "ArrowLeft")  camTheta += 0.05;
+    if (e.key === "ArrowRight") camTheta -= 0.05;
+    if (e.key === "ArrowUp")    camPhi   -= 0.05;
+    if (e.key === "ArrowDown")  camPhi   += 0.05;
+
+    updateCamera();
+    });
+
+    
+
+    /* =========================
+       LOOP
+    ========================== */
     function animate() {
         requestAnimationFrame(animate);
         renderer.render(scene, camera);
-        console.log('Cube Loaded');
-        window.dispatchEvent(new MessageEvent('message', {
-            data: 'Cube Loaded' // This triggers the loading screen to hide
-        }));
     }
+
+    
     animate();
-}
+};
