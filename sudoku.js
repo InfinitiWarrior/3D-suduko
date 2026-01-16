@@ -238,8 +238,10 @@ window.onload = function () {
         };
 
         // move camera to flat view
-        camera.position.set(0, 0, 12);
+        cam2DZoom = 12;
+        camera.position.set(0, 0, cam2DZoom);
         camera.lookAt(0, 0, 0);
+
 
         dimensionMode = "2D";
     } else {
@@ -249,6 +251,8 @@ window.onload = function () {
         camPhi = savedCamera.phi;
         camera.position.copy(savedCamera.position);
         updateCamera();
+        
+
 
         dimensionMode = "3D";
     }
@@ -301,12 +305,14 @@ window.onload = function () {
     });
 
     /* =========================
-       CAMERA CONTROLS (UNCHANGED)
+       CAMERA CONTROLS
     ========================== */
     let camRadius = 4;
     let camTheta = Math.PI / 2;
     let camPhi = Math.PI / 2;
     let savedCamera = null;
+    let cam2DZoom = 12;
+
 
 
     function updateCamera() {
@@ -317,7 +323,10 @@ window.onload = function () {
         camera.lookAt(0, 0, 0);
     }
 
+    if (dimensionMode === "3D") {
     updateCamera();
+    }
+
 
     let dragging = false;
     let lastX = 0;
@@ -343,6 +352,8 @@ window.onload = function () {
         camTheta += dx * 0.005;
         camPhi -= dy * 0.005;
         updateCamera();
+        
+
     } else {
         // 2D panning
         camera.position.x -= dx * 0.01;
@@ -366,10 +377,21 @@ document.addEventListener("keydown", e => {
 
 
     document.addEventListener("wheel", e => {
+    if (dimensionMode === "3D") {
+        // original 3D zoom
         camRadius += e.deltaY * 0.01;
         camRadius = Math.max(3, Math.min(15, camRadius));
         updateCamera();
-    });
+        
+
+    } else {
+        // 2D zoom (NO updateCamera)
+        cam2DZoom += e.deltaY * 0.01;
+        cam2DZoom = Math.max(5, Math.min(40, cam2DZoom));
+        camera.position.z = cam2DZoom;
+    }
+});
+
 
     /* =========================
        RESTART + INIT
