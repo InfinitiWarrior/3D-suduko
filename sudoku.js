@@ -23,8 +23,15 @@ window.onload = function () {
     restartBtn.style.fontSize = "16px";
     restartBtn.style.cursor = "pointer";
 
+    const dimensionBtn = document.createElement("button");
+    dimensionBtn.innerText = "Dimension Swap";
+    dimensionBtn.style.marginTop = "8px";
+    dimensionBtn.style.fontSize = "16px";
+    dimensionBtn.style.cursor = "pointer";
+
     ui.appendChild(scoreDiv);
     ui.appendChild(restartBtn);
+    ui.appendChild(dimensionBtn);
     document.body.appendChild(ui);
 
     function updateScore(delta) {
@@ -67,7 +74,6 @@ window.onload = function () {
     const cubeGeom = new THREE.BoxGeometry(3, 3, 3);
     const mainCube = new THREE.Mesh(cubeGeom, MAT_EMPTY);
     scene.add(mainCube);
-    mainCube.add(new THREE.LineSegments(new THREE.EdgesGeometry(cubeGeom), OUTLINE));
 
     /* =========================
        GRID
@@ -156,7 +162,6 @@ window.onload = function () {
 
         const spr = new THREE.Sprite(mat);
         spr.scale.set(0.3, 0.3, 0.3);
-        spr.position.set(0, 0, 0);
         return spr;
     }
 
@@ -172,7 +177,6 @@ window.onload = function () {
     function buildCells() {
         cells.length = 0;
         mainCube.clear();
-        mainCube.add(new THREE.LineSegments(new THREE.EdgesGeometry(cubeGeom), OUTLINE));
 
         for (let x = 0; x < SIZE; x++) {
             for (let y = 0; y < SIZE; y++) {
@@ -183,7 +187,8 @@ window.onload = function () {
                         x, y, z,
                         value: grid[x][y][z],
                         initial: grid[x][y][z],
-                        label: null
+                        label: null,
+                        homePosition: c.position.clone()
                     };
 
                     c.add(new THREE.LineSegments(new THREE.EdgesGeometry(geom), OUTLINE));
@@ -202,7 +207,61 @@ window.onload = function () {
     }
 
     /* =========================
-       HIGHLIGHTING
+       DIMENSION SWAP
+    ========================== */
+    let dimensionMode = "3D";
+    let dimensionAnimating = false;
+    let dimensionT = 0;
+
+    function get2DGridPosition(x, y, z) {
+        const boardSpacing = CELL * 11;
+        const gridX = z % 3;
+        const gridY = Math.floor(z / 3);
+
+        return new THREE.Vector3(
+            (gridX - 1) * boardSpacing + (x - 4) * CELL,
+            (1 - gridY) * boardSpacing + (4 - y) * CELL,
+            0
+        );
+    }
+
+    dimensionBtn.onclick = () => {
+    if (dimensionAnimating) return;
+
+    if (dimensionMode === "3D") {
+        // save 3D camera state
+        savedCamera = {
+            radius: camRadius,
+            theta: camTheta,
+            phi: camPhi,
+            position: camera.position.clone()
+        };
+
+        // move camera to flat view
+        camera.position.set(0, 0, 12);
+        camera.lookAt(0, 0, 0);
+
+        dimensionMode = "2D";
+    } else {
+        // restore 3D camera state
+        camRadius = savedCamera.radius;
+        camTheta = savedCamera.theta;
+        camPhi = savedCamera.phi;
+        camera.position.copy(savedCamera.position);
+        updateCamera();
+
+        dimensionMode = "3D";
+    }
+
+    dimensionAnimating = true;
+    dimensionT = 0;
+    dimensionBtn.innerText =
+        dimensionMode === "2D" ? "Return to Cube" : "Dimension Swap";
+};
+
+
+    /* =========================
+       HIGHLIGHTING + INPUT
     ========================== */
     let selected = null;
 
@@ -227,9 +286,6 @@ window.onload = function () {
         selected.material = MAT_SELECTED;
     }
 
-    /* =========================
-       INPUT
-    ========================== */
     const raycaster = new THREE.Raycaster();
     const mouse = new THREE.Vector2();
 
@@ -244,117 +300,20 @@ window.onload = function () {
         }
     });
 
-    document.addEventListener("keydown", e => {
-        if (!selected) return;
-        const { x, y, z, value, initial } = selected.userData;
-
-        if (e.key >= "1" && e.key <= "9") {
-            const n = parseInt(e.key);
-            if (!isValid(x, y, z, n)) {
-                updateScore(-100);
-                return;
-            }
-
-            const prev = value;
-            grid[x][y][z] = n;
-            if (createsDeadEnd(x, y, z)) {
-                grid[x][y][z] = prev;
-                updateScore(-100);
-                return;
-            }
-
-            selected.userData.value = n;
-
-            if (selected.userData.label)
-                selected.remove(selected.userData.label);
-
-            selected.userData.label = numberSprite(n);
-            selected.add(selected.userData.label);
-
-            if (prev === 0 && initial === 0) updateScore(100);
-            else if (prev !== n && initial !== n) updateScore(50);
-
-            highlightFromSelected();
-        }
-
-        if (e.key === "Backspace" || e.key === "0") {
-            if (value !== 0) {
-                grid[x][y][z] = 0;
-                selected.userData.value = 0;
-                selected.remove(selected.userData.label);
-                selected.userData.label = null;
-                highlightFromSelected();
-            }
-        }
-    });
-
     /* =========================
-       MOVEMENT
-    ========================== */
-    const EPS = 0.001;
-    const same = (a, b) =>
-        Math.abs(a.x - b.x) < EPS &&
-        Math.abs(a.y - b.y) < EPS &&
-        Math.abs(a.z - b.z) < EPS;
-
-    document.addEventListener("keydown", e => {
-        if (!selected) return;
-
-        let { x, y, z } = selected.position;
-        if (e.key === "a") x -= CELL;
-        if (e.key === "d") x += CELL;
-        if (e.key === "w") y += CELL;
-        if (e.key === "s") y -= CELL;
-        if (e.key === "q") z -= CELL;
-        if (e.key === "e") z += CELL;
-
-        const next = cells.find(c => same(c.position, { x, y, z }));
-        if (next) {
-            selected = next;
-            highlightFromSelected();
-        }
-    });
-
-    /* =========================
-       RESTART
-    ========================== */
-    function restart() {
-        score = 0;
-        updateScore(0);
-        selected = null;
-        newGrid();
-        seed();
-        initialGrid = JSON.parse(JSON.stringify(grid));
-        buildCells();
-    }
-
-    restartBtn.onclick = restart;
-
-    /* =========================
-       INIT
-    ========================== */
-    newGrid();
-    seed();
-    initialGrid = JSON.parse(JSON.stringify(grid));
-    buildCells();
-
-    window.dispatchEvent(new MessageEvent("message", { data: "Cube Loaded" }));
-
-    /* =========================
-    CAMERA CONTROLS
+       CAMERA CONTROLS (UNCHANGED)
     ========================== */
     let camRadius = 4;
-    let camTheta = Math.PI / 2; // facing +Z
-    let camPhi = Math.PI / 2;   // level (no tilt)
+    let camTheta = Math.PI / 2;
+    let camPhi = Math.PI / 2;
+    let savedCamera = null;
 
 
     function updateCamera() {
         camPhi = Math.max(0.1, Math.min(Math.PI - 0.1, camPhi));
-
         camera.position.x = camRadius * Math.sin(camPhi) * Math.cos(camTheta);
         camera.position.y = camRadius * Math.cos(camPhi);
         camera.position.z = camRadius * Math.sin(camPhi) * Math.sin(camTheta);
-
         camera.lookAt(0, 0, 0);
     }
 
@@ -374,46 +333,90 @@ window.onload = function () {
     document.addEventListener("mouseleave", () => dragging = false);
 
     document.addEventListener("mousemove", e => {
-        if (!dragging) return;
+    if (!dragging) return;
 
-        const dx = e.clientX - lastX;
-        const dy = e.clientY - lastY;
+    const dx = e.clientX - lastX;
+    const dy = e.clientY - lastY;
 
-        camTheta += dx * 0.005;   // left-right drag
-        camPhi   -= dy * 0.005;   // up-down drag
+    if (dimensionMode === "3D") {
+        // original rotation behavior
+        camTheta += dx * 0.005;
+        camPhi -= dy * 0.005;
+        updateCamera();
+    } else {
+        // 2D panning
+        camera.position.x -= dx * 0.01;
+        camera.position.y += dy * 0.01;
+    }
+
+    lastX = e.clientX;
+    lastY = e.clientY;
+});
+
+document.addEventListener("keydown", e => {
+    if (dimensionMode !== "2D") return;
+
+    const pan = 0.3;
+
+    if (e.key === "ArrowLeft")  camera.position.x -= pan;
+    if (e.key === "ArrowRight") camera.position.x += pan;
+    if (e.key === "ArrowUp")    camera.position.y += pan;
+    if (e.key === "ArrowDown")  camera.position.y -= pan;
+});
 
 
-        lastX = e.clientX;
-        lastY = e.clientY;
-
+    document.addEventListener("wheel", e => {
+        camRadius += e.deltaY * 0.01;
+        camRadius = Math.max(3, Math.min(15, camRadius));
         updateCamera();
     });
-    
-    document.addEventListener("wheel", e => {
-    camRadius += e.deltaY * 0.01;
-    camRadius = Math.max(3, Math.min(15, camRadius));
-    updateCamera();
-    });
 
-    document.addEventListener("keydown", e => {
-    if (e.key === "ArrowLeft")  camTheta += 0.05;
-    if (e.key === "ArrowRight") camTheta -= 0.05;
-    if (e.key === "ArrowUp")    camPhi   -= 0.05;
-    if (e.key === "ArrowDown")  camPhi   += 0.05;
+    /* =========================
+       RESTART + INIT
+    ========================== */
+    function restart() {
+        score = 0;
+        updateScore(0);
+        selected = null;
+        newGrid();
+        seed();
+        initialGrid = JSON.parse(JSON.stringify(grid));
+        buildCells();
+    }
 
-    updateCamera();
-    });
+    restartBtn.onclick = restart;
 
-    
+    newGrid();
+    seed();
+    initialGrid = JSON.parse(JSON.stringify(grid));
+    buildCells();
 
     /* =========================
        LOOP
     ========================== */
     function animate() {
         requestAnimationFrame(animate);
+
+        if (dimensionAnimating) {
+            dimensionT += 0.05;
+            const a = Math.min(dimensionT, 1);
+
+            for (const c of cells) {
+                const { x, y, z, homePosition } = c.userData;
+                const target = get2DGridPosition(x, y, z);
+
+                if (dimensionMode === "2D") {
+                    c.position.lerpVectors(homePosition, target, a);
+                } else {
+                    c.position.lerpVectors(target, homePosition, a);
+                }
+            }
+
+            if (a >= 1) dimensionAnimating = false;
+        }
+
         renderer.render(scene, camera);
     }
 
-    
     animate();
 };
