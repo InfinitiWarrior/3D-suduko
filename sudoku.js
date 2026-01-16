@@ -438,10 +438,25 @@ document.addEventListener("keydown", e => {
     ====================== */
     let nx = x, ny = y, nz = z;
 
-    if (e.key === "a") nx--;
-    if (e.key === "d") nx++;
-    if (e.key === "w") ny--;
-    if (e.key === "s") ny++;
+    // Depth is always the same
+    if (e.key === "q") nz--;
+    if (e.key === "e") nz++;
+
+    // Screen-relative movement
+    if (dimensionMode === "3D") {
+        // World-aligned (original behavior)
+        if (e.key === "w") ny--;
+        if (e.key === "s") ny++;
+        if (e.key === "a") nx--;
+        if (e.key === "d") nx++;
+    } else {
+        // 2D view is visually flipped in X and Y
+        if (e.key === "w") ny++;
+        if (e.key === "s") ny--;
+        if (e.key === "a") nx++;
+        if (e.key === "d") nx--;
+    }
+
     if (e.key === "q") nz--;
     if (e.key === "e") nz++;
 
