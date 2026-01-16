@@ -365,15 +365,105 @@ window.onload = function () {
 });
 
 document.addEventListener("keydown", e => {
-    if (dimensionMode !== "2D") return;
+    if (!selected) return;
 
-    const pan = 0.3;
+    const { x, y, z, value, initial } = selected.userData;
 
-    if (e.key === "ArrowLeft")  camera.position.x -= pan;
-    if (e.key === "ArrowRight") camera.position.x += pan;
-    if (e.key === "ArrowUp")    camera.position.y += pan;
-    if (e.key === "ArrowDown")  camera.position.y -= pan;
+    /* =====================
+       PREVENT SCROLL
+    ====================== */
+    if (["ArrowUp","ArrowDown","ArrowLeft","ArrowRight"].includes(e.key)) {
+        e.preventDefault();
+    }
+
+    /* =====================
+       CAMERA (ARROW KEYS)
+    ====================== */
+    if (dimensionMode === "3D") {
+        if (e.key === "ArrowLeft")  camTheta += 0.05;
+        if (e.key === "ArrowRight") camTheta -= 0.05;
+        if (e.key === "ArrowUp")    camPhi   -= 0.05;
+        if (e.key === "ArrowDown")  camPhi   += 0.05;
+        updateCamera();
+    } else {
+        const pan = 0.3;
+        if (e.key === "ArrowLeft")  camera.position.x -= pan;
+        if (e.key === "ArrowRight") camera.position.x += pan;
+        if (e.key === "ArrowUp")    camera.position.y += pan;
+        if (e.key === "ArrowDown")  camera.position.y -= pan;
+    }
+
+    /* =====================
+       WASDQE MOVEMENT
+    ====================== */
+    let nx = x, ny = y, nz = z;
+
+    if (e.key === "a") nx--;
+    if (e.key === "d") nx++;
+    if (e.key === "w") ny++;
+    if (e.key === "s") ny--;
+    if (e.key === "q") nz--;
+    if (e.key === "e") nz++;
+
+    nx = Math.max(0, Math.min(8, nx));
+    ny = Math.max(0, Math.min(8, ny));
+    nz = Math.max(0, Math.min(8, nz));
+
+    const next = cells[idx(nx, ny, nz)];
+    if (next && next !== selected) {
+        selected = next;
+        highlightFromSelected();
+        return;
+    }
+
+    /* =====================
+       NUMBER INPUT
+    ====================== */
+    if (e.key >= "1" && e.key <= "9") {
+        const n = parseInt(e.key);
+
+        if (!isValid(x, y, z, n)) {
+            updateScore(-100);
+            return;
+        }
+
+        const prev = value;
+        grid[x][y][z] = n;
+
+        if (createsDeadEnd(x, y, z)) {
+            grid[x][y][z] = prev;
+            updateScore(-100);
+            return;
+        }
+
+        selected.userData.value = n;
+
+        if (selected.userData.label)
+            selected.remove(selected.userData.label);
+
+        selected.userData.label = numberSprite(n);
+        selected.add(selected.userData.label);
+
+        if (prev === 0 && initial === 0) updateScore(100);
+        else if (prev !== n && initial !== n) updateScore(50);
+
+        highlightFromSelected();
+    }
+
+    /* =====================
+       DELETE / CLEAR
+    ====================== */
+    if (e.key === "Backspace" || e.key === "0") {
+        if (value !== 0 && initial === 0) {
+            grid[x][y][z] = 0;
+            selected.userData.value = 0;
+            selected.remove(selected.userData.label);
+            selected.userData.label = null;
+            highlightFromSelected();
+        }
+    }
 });
+
 
 
     document.addEventListener("wheel", e => {
