@@ -445,14 +445,14 @@ document.addEventListener("keydown", e => {
     // Screen-relative movement
     if (dimensionMode === "3D") {
         // World-aligned (original behavior)
-        if (e.key === "w") ny--;
-        if (e.key === "s") ny++;
+        if (e.key === "w") ny++;
+        if (e.key === "s") ny--;
         if (e.key === "a") nx--;
         if (e.key === "d") nx++;
     } else {
         // 2D view is visually flipped in X and Y
-        if (e.key === "w") ny++;
-        if (e.key === "s") ny--;
+        if (e.key === "w") ny--;
+        if (e.key === "s") ny++;
         if (e.key === "a") nx++;
         if (e.key === "d") nx--;
     }
