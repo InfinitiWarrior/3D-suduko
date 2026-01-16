@@ -90,15 +90,34 @@ window.onload = function () {
     }
 
     function isValid(x, y, z, n) {
-        for (let i = 0; i < SIZE; i++) {
-            if (
-                grid[x][y][i] === n ||
-                grid[x][i][z] === n ||
-                grid[i][y][z] === n
-            ) return false;
-        }
-        return true;
+    // Row (same y, same z)
+    for (let i = 0; i < SIZE; i++) {
+        if (grid[i][y][z] === n) return false;
     }
+
+    // Column (same x, same z)
+    for (let i = 0; i < SIZE; i++) {
+        if (grid[x][i][z] === n) return false;
+    }
+
+    // Depth (same x, same y across boards)
+    for (let i = 0; i < SIZE; i++) {
+        if (grid[x][y][i] === n) return false;
+    }
+
+    // 3×3 block ON THIS BOARD ONLY
+    const bx = Math.floor(x / 3) * 3;
+    const by = Math.floor(y / 3) * 3;
+
+    for (let dx = 0; dx < 3; dx++) {
+        for (let dy = 0; dy < 3; dy++) {
+            if (grid[bx + dx][by + dy][z] === n) return false;
+        }
+    }
+
+    return true;
+}
+
 
     function hasAnyCandidate(x, y, z) {
         for (let n = 1; n <= 9; n++) {
@@ -307,6 +326,7 @@ window.onload = function () {
     for (const src of sources) {
         const { x, y, z } = src.userData;
 
+        // ===== EXISTING "+" LINES =====
         for (let i = 0; i < SIZE; i++) {
             const cx = cells[idx(x, y, i)];
             const cy = cells[idx(x, i, z)];
@@ -320,6 +340,19 @@ window.onload = function () {
             cy.material.color.set(0x6666ff);
             cz.material.color.set(0x6666ff);
         }
+
+        // 3×3 block (same board only) — SAME visual strength
+        const bx = Math.floor(x / 3) * 3;
+        const by = Math.floor(y / 3) * 3;
+
+        for (let dx = 0; dx < 3; dx++) {
+            for (let dy = 0; dy < 3; dy++) {
+                const b = cells[idx(bx + dx, by + dy, z)];
+                b.material.opacity = OPACITY_LINE;
+                b.material.color.set(0x6666ff);
+            }
+        }
+
     }
 
     // reassert selected so it always wins
@@ -437,10 +470,6 @@ document.addEventListener("keydown", e => {
        WASDQE MOVEMENT
     ====================== */
     let nx = x, ny = y, nz = z;
-
-    // Depth is always the same
-    if (e.key === "q") nz--;
-    if (e.key === "e") nz++;
 
     // Screen-relative movement
     if (dimensionMode === "3D") {
